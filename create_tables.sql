@@ -138,4 +138,4 @@ veggies_day int,
 vitamins int,
 waffle_calories int,
 weight int
-)
+);
