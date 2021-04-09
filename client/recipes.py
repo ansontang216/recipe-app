@@ -1,5 +1,6 @@
 import os
 import mysql.connector
+from recipe import recipe
 
 class recipes:
 
@@ -60,38 +61,88 @@ class recipes:
                   database = 'project_28',
                   use_pure=True)
 
-        mycursor = conn.cursor()
+        mycursor = conn.cursor(dictionary=True)
         return mycursor
 
 
     def findRecipeByName(self, recipeName, mycursor):
 
-        mycursor.execute("SELECT * From CleanRecipes WHERE Name like '%{}%'".format(recipeName))
+        mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE recipe_name like '%{}%'".format(recipeName))
         myresult = mycursor.fetchall()
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
+        print("Pick a recipe from the following list:")
 
+        i = 0
         for x in myresult:
-            print(x)
+            i+=1
+            recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
+            
+            print ("%i. %s" % (i, x["recipe_name"]))
+
+        userPickedRecipe = int(input("Please select a recipe: "))
+        recipeID = recipesWithID[userPickedRecipe - 1].recipeID
+        
+        self.getIngredientsAndInstructionsForRecipe(mycursor, recipeID)
+        self.getReviewsForRecipe(mycursor, recipeID)
+
         return
 
+    def findRecipeByIngredients(self, ingredients, mycursor):
+        
+
+    def getIngredientsAndInstructionsForRecipe(self, mycursor, recipeID):
+
+        mycursor.execute("SELECT ingredient_number, ingredient_name From Ingredients WHERE recipe_id = '{}' ORDER BY ingredient_number ASC;".format(recipeID))
+        myresult = mycursor.fetchall()
+        
+        for x in myresult:
+            print ("%s. %s" % (x["ingredient_number"], x["ingredient_name"]))
+
+        mycursor.execute(" SELECT step, description From Instructions WHERE recipe_id = '{}' ORDER BY step ASC;".format(recipeID))
+        myresult = mycursor.fetchall()
+
+        for x in myresult:
+            print ("%s. %s" % (x["step"], x["description"]))
+
+        return
+
+    def getReviewsForRecipe(self, mycursor, recipeID):
+
+        yesOrNoReviews = input("Would you like to view Reviews for this Recipe? (Y/N)")
+
+        if (yesOrNoReviews == "Y"):
+            filterByRating = input("Would you like to filter Reviews by Ratings? (Y/N)")
+
+            if(filterByRating == "Y"):
+                getMinimumRating = int(input("Select a minimum rating from 1-5 "))
+            
+                mycursor.execute(" SELECT rate, comment From Instructions WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
+                myresult = mycursor.fetchall()
+                
+                i = 0
+                for x in myresult:
+                    i = i + 1
+                    print ("%i. %s" % (i, x["comment"]))
+
+            elif(filterByRating == "N"):
+                mycursor.execute(" SELECT rate, comment From Instructions WHERE recipe_id = '{}';".format(recipeID))
+                myresult = mycursor.fetchall()
+                
+                i = 0
+                for x in myresult:
+                    i = i + 1
+                    print ("%i. %s" % (i, x["comment"]))
+
+        
+    
     # def performSignIn(self):
 
     # def performSignUp(self):
     
     # def findRecipeByIngredients(self):
 
-    # def findRecipesByCookTime(self):
-
     # def findRecipeByTotalTime(self):
-
-    # def findInstructionsForRecipe(self):
-    
-    # def findIngredientsForRecipe(self)
-
-    # def presentRecipeToUser(self):
-
-    # def findReviewsForRecipe(self, recipeID):
 
     # def submitRecipe(self):
 
