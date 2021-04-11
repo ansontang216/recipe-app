@@ -1,6 +1,9 @@
 import os
 import mysql.connector
 from recipe import recipe
+from sqlalchemy import create_engine
+import pymysql
+from scipy.sparse.linalg import svds
 
 class recipes:
 
@@ -134,6 +137,85 @@ class recipes:
                     i = i + 1
                     print ("%i. %s" % (i, x["comment"]))
 
+    def helper(preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
+        
+        user_row_number = userID 
+        sorted_user_predictions = preds_df.iloc[user_row_number].sort_values(ascending=False) # UserID starts at 1
+
+        user_data = original_ratings_df[original_ratings_df.profileID == (userID)]
+        user_full = (user_data.merge(movies_df, how = 'left', left_on = 'recipeID', right_on = 'recipeID').
+                        sort_values(['rate'], ascending=False))
+        
+        recommendations = (movies_df[~movies_df['recipeID'].isin(user_full['recipeID'])]).merge(pd.DataFrame(sorted_user_predictions).reset_index(), how = 'left', left_on = 'recipeID',
+                right_on = 'recipeID').rename(columns = {user_row_number: 'Predictions'}).sort_values('Predictions', ascending = False).iloc[:num_recommendations, :-1]
+                      
+    return user_full, recommendations
+    
+    ### Takes an userID as an input
+    ### Returns 5 recommendations for the userID
+    ### Returns a pandas dataframe wich Recipe name and recipe ID 
+    def recommend_recipes(self, userID)
+        # Read MySQL tables to pandas Dataframe using pysql
+                          #'mysql+pymysql://mysql_user:mysql_password@mysql_host/mysql_db'
+        db_connection_str = 'mysql+pymysql://a32saini:dbhty@zRCkIT5@LY4T^4@marmoset04.shoshin.uwaterloo.ca/project_28'
+        db_connection = create_engine(db_connection_str)
+        # store as dataframe 
+        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=dbConnection);
+        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=dbConnection);
+        
+        usrID_index = -1
+        # create a temp table which maps and stores profileID as index that starts from 0
+        temp = reviews.sort_values("profileID").reset_index(drop=True)
+        # Use a subset of reviews if the entire reviews makes the table crash.
+        # temp = rv[:50000].sort_values("profileID").reset_index(drop=True)
+        prev_id = -1
+        curr_id = -1
+        k = 0 
+        for i in range(len(temp)):
+            curr_id = temp.loc[i, 'profileID']
+            if prev_id == curr_id:
+                temp.loc[i, 'profileID'] = k - 1
+            else :
+                temp.loc[i, 'profileID'] = k
+                k = k+1
+            prev_id  = curr_id
+            ## Store userID index for future use in the algorith
+            if curr_id == userID:
+               usrID_index = temp.loc[i, 'profileID']
+
+        user_ratings = temp[['recipeID', 'profileID', 'rate']]
+
+        # remove duplicates
+        user_ratings_new = user_ratings.drop_duplicates(subset=["recipeID", "profileID"], keep = 'last').reset_index(drop = True)
+
+        # Create a matrix for userID recipeID and the rating
+        df_recipe_features = user_ratings_new.pivot(
+                                                    index='profileID',
+                                                    columns='recipeID',
+                                                    values='rate'
+                                                    ).fillna(0)
+        ## SVD algorithm
+        R = df_recipe_features.values
+        user_ratings_mean = np.mean(R, axis = 1)
+        R_demeaned = R - user_ratings_mean.reshape(-1, 1)
+
+        U, sigma, Vt = svds(R_demeaned, k = 50)
+        sigma = np.diag(sigma)
+        all_user_predicted_ratings = np.dot(np.dot(U, sigma), Vt) + user_ratings_mean.reshape(-1, 1)
+
+        # Get rating predictions
+        preds_df = pd.DataFrame(all_user_predicted_ratings, columns = df_recipe_features.columns)
+
+        #Get recommendations
+        # 5 is the number of recommendation, can change it to a different number too
+        already_rated, recommendation = helper(preds_df, userID, recipes, user_ratings_new, 5)
+
+    #returns a pandas dataframe wich Recipe name and recipe ID 
+    # can be converted to np array if needed
+    return recommendation
+
+
+        
         
     
     # def performSignIn(self):
