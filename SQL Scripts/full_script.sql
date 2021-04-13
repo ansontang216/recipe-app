@@ -97,12 +97,24 @@ order by recipe_id,step;
 
 CREATE TABLE Users
 (
-profile_id int NOT NULL,
+profile_id int NOT NULL AUTO_INCREMENT,
 PRIMARY KEY(profile_id)
 );
 
+ALTER TABLE Users
+ADD username varchar(255),
+ADD password varchar(255),
+ADD numOfReviews int;
+
 insert into Users(profile_id)
 select distinct profile_id from CleanReviews;
+
+WITH ReviewByProfileID as (
+select profile_id as ProfileID,count(*) as countReviews from CleanReviews group by profile_id
+)
+UPDATE Users,ReviewByProfileID
+SET numOfReviews = countReviews
+WHERE Users.profile_id = ProfileID;
 
 CREATE TABLE Instructions
 (
@@ -151,3 +163,51 @@ DROP COLUMN ingredients;
 
 ALTER TABLE CleanRecipes
 DROP COLUMN directions;
+
+CREATE TABLE Interactions(
+  user_id int NOT NULL,
+  recipe_id int NOT NULL,
+  dateInteraction datetime,
+  rating int,
+  review text
+);
+
+show warnings;
+
+load data infile '/var/lib/mysql-files/02-Recipes/RAW_interactions.csv' ignore into table Interactions
+     fields 
+        TERMINATED by ','
+        OPTIONALLY enclosed by '"'
+        ESCAPED BY '\\'
+     lines 
+        TERMINATED by '\r\n'
+     ignore 1 lines
+(user_id,recipe_id,dateInteraction,rating,review);
+
+
+CREATE TABLE RecipeIngredients
+(
+  recipe_id int NOT NULL,
+  ingredients blob
+);
+
+load data infile '/var/lib/mysql-files/02-Recipes/project28/cleaned-recipes2.csv' ignore into table RecipeIngredients
+     fields terminated by ','
+     enclosed by '"'
+     lines terminated by '\n'
+     ignore 1 lines
+(@id,@recipe_name,recipe_id,@review_count,@recipe_photo,@author,@prepare_time,@cook_time,@total_time,ingredients,@directions);
+
+WITH UpdateIngredientsString as (
+  SELECT recipe_id, REPLACE(ingredients,'**',',') as newString from RecipeIngredients 
+)
+UPDATE RecipeIngredients,UpdateIngredientsString
+SET ingredients = newString
+WHERE RecipeIngredients.recipe_id = UpdateIngredientsString.recipe_id;
+
+CREATE TABLE user_pass_backup (
+  id int,
+  user varchar(255),
+  pass varchar(255)
+);
+
