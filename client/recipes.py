@@ -14,10 +14,10 @@ class recipes:
         self.startCLI()
         self.loggedIn = False
         self.username = ""
-        self.profileID = None
+        self.profileID = 0
 
     def startCLI(self):
-
+        
         loginResponse = input("Would you like to Log In/Sign Up? (Y/N): ")
 
         if (loginResponse == "Y"):
@@ -26,6 +26,7 @@ class recipes:
             signingInResponse = input(signingIn)
 
             if (signingInResponse == "1"):
+                print("Peforming sign in..")
                 self.performSignIn()
             elif (signingInResponse == "2"):
                 self.performSignUp()
@@ -51,7 +52,8 @@ class recipes:
 
         elif (firstResponse == "2"):
             recommendedRecipes = self.recommend_recipes(self.profileID)
-            print(recommendedRecipes)
+            self.getRecipesFromDataframe(recommendedRecipes)
+
         return
 
 
@@ -160,7 +162,7 @@ class recipes:
             if(filterByRating == "Y"):
                 getMinimumRating = int(input("Select a minimum rating from 1-5 "))
             
-                self.mycursor.execute(" SELECT rate, comment From Instructions WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
+                self.mycursor.execute(" SELECT rate, comment From CleanReviews WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
                 myresult = self.mycursor.fetchall()
                 
                 i = 0
@@ -178,17 +180,17 @@ class recipes:
                     print ("%i. %s" % (i, x["comment"]))
 
     def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
-        
+    
         user_row_number = userID 
         sorted_user_predictions = preds_df.iloc[user_row_number].sort_values(ascending=False) # UserID starts at 1
 
-        user_data = original_ratings_df[original_ratings_df.profileID == (userID)]
-        user_full = (user_data.merge(movies_df, how = 'left', left_on = 'recipeID', right_on = 'recipeID').
+        user_data = original_ratings_df[original_ratings_df.profile_id == (userID)]
+        user_full = (user_data.merge(movies_df, how = 'left', left_on = 'recipe_id', right_on = 'recipe_id').
                         sort_values(['rate'], ascending=False))
-        
-        recommendations = (movies_df[~movies_df['recipeID'].isin(user_full['recipeID'])]).merge(pd.DataFrame(sorted_user_predictions).reset_index(), how = 'left', left_on = 'recipeID',
-                right_on = 'recipeID').rename(columns = {user_row_number: 'Predictions'}).sort_values('Predictions', ascending = False).iloc[:num_recommendations, :-1]
-                      
+    
+        recommendations = (movies_df[~movies_df['recipe_id'].isin(user_full['recipe_id'])]).merge(pd.DataFrame(sorted_user_predictions).reset_index(), how = 'left', left_on = 'recipe_id',
+                right_on = 'recipe_id').rename(columns = {user_row_number: 'Predictions'}).sort_values('Predictions', ascending = False).iloc[:num_recommendations, :-1]
+    
         return user_full, recommendations
 
     def recommend_recipes(self, userID):
@@ -198,8 +200,7 @@ class recipes:
     
         recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=db_connection)
         reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=db_connection)
-        print("Printing recipes..")
-        print(recipes)
+        
 
         usrID_index = -1
         # create a temp table which maps and stores profileID as index that starts from 0
@@ -220,6 +221,7 @@ class recipes:
             ## Store userID index for future use in the algorith
             if curr_id == userID:
                usrID_index = temp.loc[i, 'profile_id']
+        
 
         user_ratings = temp[['recipe_id', 'profile_id', 'rate']]
 
@@ -240,14 +242,14 @@ class recipes:
         U, sigma, Vt = svds(R_demeaned, k = 50)
         sigma = np.diag(sigma)
         all_user_predicted_ratings = np.dot(np.dot(U, sigma), Vt) + user_ratings_mean.reshape(-1, 1)
-
+        
         # Get rating predictions
         preds_df = pd.DataFrame(all_user_predicted_ratings, columns = df_recipe_features.columns)
 
         #Get recommendations
         # 5 is the number of recommendation, can change it to a different number too
-        already_rated, recommendation = self.helper(preds_df, userID, recipes, user_ratings_new, 5)
-
+        already_rated, recommendation = self.helper(preds_df, usrID_index, recipes, user_ratings_new, 5)
+        
         #returns a pandas dataframe wich Recipe name and recipe ID 
         # can be converted to np array if needed
         return recommendation
@@ -258,7 +260,6 @@ class recipes:
         getPassword = input("Please enter your password: ")
         self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND password = '{}';".format(getUsername, getPassword))
         myresult = self.mycursor.fetchall()
-
         if (len(myresult) == 0):
             print("Incorrect Username or Password. Please restart the app and try again.")
         else:
@@ -390,5 +391,23 @@ class recipes:
                 self.mycursor.execute("UPDATE Users SET numOfReviews = '{}' WHERE profile_id = '{}'".format(numReviews, self.profileID))
                 self.database.commit()
 
+    def getRecipesFromDataframe(self, recipes):
 
+        recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
+        print("Pick a recipe from the following list:")
+
+        i = 0
+        for index, x in recipes.iterrows():
+            i+=1
+            recipesWithID.append(recipe(x['recipe_name'], x['recipe_id'], i))
+            
+            print ("%i. %s" % (i, x['recipe_name']))
+
+        userPickedRecipe = int(input("Please select a recipe: "))
+        recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
+        self.getIngredientsAndInstructionsForRecipe(recipeID)
+        self.getReviewsForRecipe(recipeID)
+        self.submitReview(recipeID)
+
+        return
