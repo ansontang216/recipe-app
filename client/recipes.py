@@ -15,7 +15,6 @@ class recipes:
         self.loggedIn = False
         self.username = ""
         self.profileID = None
-        
 
     def startCLI(self):
 
@@ -191,52 +190,49 @@ class recipes:
                 right_on = 'recipeID').rename(columns = {user_row_number: 'Predictions'}).sort_values('Predictions', ascending = False).iloc[:num_recommendations, :-1]
                       
         return user_full, recommendations
-    
-    ### Takes an userID as an input
-    ### Returns 5 recommendations for the userID
-    ### Returns a pandas dataframe wich Recipe name and recipe ID 
 
     def recommend_recipes(self, userID):
-        # Read MySQL tables to pandas Dataframe using pysql
-                          #'mysql+pymysql://mysql_user:mysql_password@mysql_host/mysql_db'
+
         db_connection_str = 'mysql+pymysql://a32saini:dbhty@zRCkIT5@LY4T^4@marmoset04.shoshin.uwaterloo.ca/project_28'
         db_connection = create_engine(db_connection_str)
-        # store as dataframe 
+    
         recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=db_connection)
         reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=db_connection)
-        
+        print("Printing recipes..")
+        print(recipes)
+
         usrID_index = -1
         # create a temp table which maps and stores profileID as index that starts from 0
-        temp = reviews.sort_values("profileID").reset_index(drop=True)
+        temp = reviews.sort_values("profile_id").reset_index(drop=True)
         # Use a subset of reviews if the entire reviews makes the table crash.
         # temp = rv[:50000].sort_values("profileID").reset_index(drop=True)
         prev_id = -1
         curr_id = -1
         k = 0 
         for i in range(len(temp)):
-            curr_id = temp.loc[i, 'profileID']
+            curr_id = temp.loc[i, 'profile_id']
             if prev_id == curr_id:
-                temp.loc[i, 'profileID'] = k - 1
+                temp.loc[i, 'profile_id'] = k - 1
             else :
-                temp.loc[i, 'profileID'] = k
+                temp.loc[i, 'profile_id'] = k
                 k = k+1
             prev_id  = curr_id
             ## Store userID index for future use in the algorith
             if curr_id == userID:
-               usrID_index = temp.loc[i, 'profileID']
+               usrID_index = temp.loc[i, 'profile_id']
 
-        user_ratings = temp[['recipeID', 'profileID', 'rate']]
+        user_ratings = temp[['recipe_id', 'profile_id', 'rate']]
 
         # remove duplicates
-        user_ratings_new = user_ratings.drop_duplicates(subset=["recipeID", "profileID"], keep = 'last').reset_index(drop = True)
+        user_ratings_new = user_ratings.drop_duplicates(subset=["recipe_id", "profile_id"], keep = 'last').reset_index(drop = True)
 
         # Create a matrix for userID recipeID and the rating
         df_recipe_features = user_ratings_new.pivot(
-                                                    index='profileID',
-                                                    columns='recipeID',
+                                                    index='profile_id',
+                                                    columns='recipe_id',
                                                     values='rate'
                                                     ).fillna(0)
-        ## SVD algorithm
+        # SVD algorithm
         R = df_recipe_features.values
         user_ratings_mean = np.mean(R, axis = 1)
         R_demeaned = R - user_ratings_mean.reshape(-1, 1)
@@ -378,7 +374,7 @@ class recipes:
         elif(getReviewsResponse == "Y"):
 
             if (not self.loggedIn):
-                print("You need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up")
+                print("You need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up.")
                 return
             else:
                 getRating = int(input("Please enter a rating from 1-5: "))
