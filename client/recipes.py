@@ -4,24 +4,25 @@ from recipe import recipe
 from sqlalchemy import create_engine
 import pymysql
 from scipy.sparse.linalg import svds
+import pandas as pd
+import numpy as np
 
 class recipes:
 
     def __init__(self):
         self.mycursor, self.database = self.connectToDatabase()
-        self.startCLI(self.mycursor)
+        self.startCLI()
         self.loggedIn = False
         self.username = ""
         self.profileID = None
         
 
-    def startCLI(self, cursor):
+    def startCLI(self):
 
-        loginResponse = input("Would you like to Log In/Sign Up? (Y/N)")
+        loginResponse = input("Would you like to Log In/Sign Up? (Y/N): ")
 
         if (loginResponse == "Y"):
-            signingIn = """1. Sign In
-                           2. Sign Up """
+            signingIn = """1. Sign In\n2. Sign Up """
             
             signingInResponse = input(signingIn)
 
@@ -30,28 +31,30 @@ class recipes:
             elif (signingInResponse == "2"):
                 self.performSignUp()
 
-        openingMessage = """1. Recipes """
+        openingMessage = """1. Recipes\n2. Recommend recipes to me"""
 
         firstResponse = input(openingMessage)
 
         if (firstResponse == "1"):
-            recipesMessage = """1. Find Recipe:
-                                    11. Find Recipe by Name
-                                    12. Find Recipe by Ingredients
-                                    13. Find Recipe by Total Time
-                                2. Submit Recipe"""
+            recipesMessage = """1. Find Recipe:\n11. Find Recipe by Name\n12. Find Recipe by Ingredients\n13. Find Recipe by Total Time\n2. Submit Recipe"""
 
             recipesResponse = input(recipesMessage)
 
             if (recipesResponse == "11"):
                 getRecipeName = input("Please input the name of the recipe: ")
-                self.findRecipeByName(self.mycursor, getRecipeName)
+                self.findRecipeByName(getRecipeName)
             elif (recipesResponse == "12"):
-                self.findRecipeByIngredients(self.mycursor)
+                self.findRecipeByIngredients()
             elif (recipesResponse == "13"):
                 self.findRecipeByTotalTime()
             elif (recipesResponse == "2"):
                 self.submitRecipe()
+
+        elif (firstResponse == "2"):
+            recommendedRecipes = self.recommend_recipes(self.profileID)
+            print(recommendedRecipes)
+        return
+
 
     def connectToDatabase(self):
         conn = mysql.connector.connect(host = 'marmoset04.shoshin.uwaterloo.ca',
@@ -64,10 +67,10 @@ class recipes:
         return mycursor, conn
 
 
-    def findRecipeByName(self, recipeName, mycursor):
-
-        mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE recipe_name like '%{}%'".format(recipeName))
-        myresult = mycursor.fetchall()
+    def findRecipeByName(self, recipeName):
+        
+        self.mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE recipe_name like '%{}%';".format(recipeName))
+        myresult = self.mycursor.fetchall()
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
         print("Pick a recipe from the following list:")
@@ -82,9 +85,9 @@ class recipes:
         userPickedRecipe = int(input("Please select a recipe: "))
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
-        self.getIngredientsAndInstructionsForRecipe(mycursor, recipeID)
-        self.getReviewsForRecipe(mycursor, recipeID)
-        self.submitReview(self.mycursor, recipeID)
+        self.getIngredientsAndInstructionsForRecipe(recipeID)
+        self.getReviewsForRecipe(recipeID)
+        self.submitReview(recipeID)
 
         return
 
@@ -103,14 +106,14 @@ class recipes:
         return stringToReturn
 
 
-    def findRecipeByIngredients(self, mycursor):
+    def findRecipeByIngredients(self):
         getIngredients = input("Please enter your ingredients separated by commas. (For eg: eggs, milk, sugar)")
         ingredients = []
         ingredients = getIngredients.split(",")
         like = self.likeClauseForIngredients(ingredients)
 
-        mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_id in (SELECT recipe_id From RecipeIngredients WHERE {});".format(like) )
-        myresult = mycursor.fetchall()
+        self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_id in (SELECT recipe_id From RecipeIngredients WHERE {});".format(like) )
+        myresult = self.mycursor.fetchall()
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
         print("Pick a recipe from the following list:")
@@ -125,30 +128,30 @@ class recipes:
         userPickedRecipe = int(input("Please select a recipe: "))
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
-        self.getIngredientsAndInstructionsForRecipe(mycursor, recipeID)
-        self.getReviewsForRecipe(mycursor, recipeID)
-        self.submitReview(self.mycursor, recipeID)
+        self.getIngredientsAndInstructionsForRecipe(recipeID)
+        self.getReviewsForRecipe(recipeID)
+        self.submitReview(recipeID)
         
         return
 
 
-    def getIngredientsAndInstructionsForRecipe(self, mycursor, recipeID):
+    def getIngredientsAndInstructionsForRecipe(self, recipeID):
 
-        mycursor.execute("SELECT ingredient_number, ingredient_name From Ingredients WHERE recipe_id = '{}' ORDER BY ingredient_number ASC;".format(recipeID))
-        myresult = mycursor.fetchall()
+        self.mycursor.execute("SELECT ingredient_number, ingredient_name From Ingredients WHERE recipe_id = '{}' ORDER BY ingredient_number ASC;".format(recipeID))
+        myresult = self.mycursor.fetchall()
         
         for x in myresult:
             print ("%s. %s" % (x["ingredient_number"], x["ingredient_name"]))
 
-        mycursor.execute(" SELECT step, description From Instructions WHERE recipe_id = '{}' ORDER BY step ASC;".format(recipeID))
-        myresult = mycursor.fetchall()
+        self.mycursor.execute(" SELECT step, description From Instructions WHERE recipe_id = '{}' ORDER BY step ASC;".format(recipeID))
+        myresult = self.mycursor.fetchall()
 
         for x in myresult:
             print ("%s. %s" % (x["step"], x["description"]))
 
         return
 
-    def getReviewsForRecipe(self, mycursor, recipeID):
+    def getReviewsForRecipe(self, recipeID):
 
         yesOrNoReviews = input("Would you like to view Reviews for this Recipe? (Y/N)")
 
@@ -158,8 +161,8 @@ class recipes:
             if(filterByRating == "Y"):
                 getMinimumRating = int(input("Select a minimum rating from 1-5 "))
             
-                mycursor.execute(" SELECT rate, comment From Instructions WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
-                myresult = mycursor.fetchall()
+                self.mycursor.execute(" SELECT rate, comment From Instructions WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
+                myresult = self.mycursor.fetchall()
                 
                 i = 0
                 for x in myresult:
@@ -167,8 +170,8 @@ class recipes:
                     print ("%i. %s" % (i, x["comment"]))
 
             elif(filterByRating == "N"):
-                mycursor.execute(" SELECT rate, comment From Instructions WHERE recipe_id = '{}';".format(recipeID))
-                myresult = mycursor.fetchall()
+                self.mycursor.execute(" SELECT rate, comment From CleanReviews WHERE recipe_id = '{}';".format(recipeID))
+                myresult = self.mycursor.fetchall()
                 
                 i = 0
                 for x in myresult:
@@ -257,7 +260,7 @@ class recipes:
 
         getUsername = input("Please enter your username: ")
         getPassword = input("Please enter your password: ")
-        self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND passwword = '{}';".format(getUsername, getPassword))
+        self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND password = '{}';".format(getUsername, getPassword))
         myresult = self.mycursor.fetchall()
 
         if (len(myresult) == 0):
@@ -269,26 +272,26 @@ class recipes:
 
         return
 
-    def doesUsernameExist(self, mycursor, username):
-        mycursor.execute( "SELECT * FROM Users where username = {};".format(username) )
-        myresult = mycursor.fetchall()
+    def doesUsernameExist(self, username):
+        self.mycursor.execute( "SELECT * FROM Users where username = '{}';".format(username) )
+        myresult = self.mycursor.fetchall()
 
         newUsername = username
 
         if (len(myresult) != 0):
             newUsername = input("Please enter another username, as this is already taken ")
-            self.doesUsernameExist(mycursor, newUsername)
+            self.doesUsernameExist(newUsername)
         else:
             return newUsername
 
     def performSignUp(self):
         getUsername = input("Please enter a username: ")
-        newUsername = self.doesUsernameExist(self.mycursor, getUsername)
+        newUsername = self.doesUsernameExist(getUsername)
         getPassword = input("Please enter a password: ")
-        self.mycursor.execute( "INSERT INTO Users (username, passwword) VALUES ({},{});".format(newUsername, getPassword) )
-        self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND passwword = '{}';".format(newUsername, getPassword))
-        myresult = self.mycursor.fetchall()
+        self.mycursor.execute( "INSERT INTO Users (username, password) VALUES ('{}','{}');".format(newUsername, getPassword) )
         self.database.commit()
+        self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND password = '{}';".format(newUsername, getPassword))
+        myresult = self.mycursor.fetchall()
         self.username = newUsername
         self.profileID = myresult[0]["profile_id"]
         self.loggedIn = True
@@ -313,9 +316,9 @@ class recipes:
         userPickedRecipe = int(input("Please select a recipe: "))
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
-        self.getIngredientsAndInstructionsForRecipe(self.mycursor, recipeID)
-        self.getReviewsForRecipe(self.mycursor, recipeID)
-        self.submitReview(self.mycursor, recipeID)
+        self.getIngredientsAndInstructionsForRecipe(recipeID)
+        self.getReviewsForRecipe(recipeID)
+        self.submitReview(recipeID)
         
         return
 
@@ -367,7 +370,7 @@ class recipes:
         self.database.commit()
         return
 
-    def submitReview(self, mycursor, recipe_id):
+    def submitReview(self, recipe_id):
 
         getReviewsResponse = input("Would you like to leave a review for this recipe? (Y/N): ")
         if(getReviewsResponse == "N"):
@@ -385,7 +388,9 @@ class recipes:
                 self.database.commit()
                 self.mycursor.execute("SELECT numOfReviews FROM Users WHERE profile_id = '{}'".format(self.profileID))
                 myresult = self.mycursor.fetchall()
-                numReviews = int(myresult[0]["numOfReviews"]) + 1
+                numReviews = 0
+                numReviews = myresult[0]["numOfReviews"] 
+                numReviews = numReviews + 1
                 self.mycursor.execute("UPDATE Users SET numOfReviews = '{}' WHERE profile_id = '{}'".format(numReviews, self.profileID))
                 self.database.commit()
 
