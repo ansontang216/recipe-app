@@ -30,7 +30,9 @@ class recipes:
                 self.performSignIn()
             elif (signingInResponse == "2"):
                 self.performSignUp()
-
+        else:
+            self.loggedIn = False
+            
         openingMessage = """1. Recipes\n2. Recommend recipes to me"""
 
         firstResponse = input(openingMessage)
@@ -374,7 +376,7 @@ class recipes:
             return
         elif(getReviewsResponse == "Y"):
 
-            if (not self.loggedIn):
+            if (self.loggedIn == False):
                 print("You need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up.")
                 return
             else:
