@@ -326,7 +326,7 @@ class recipes:
             print("You are not logged in. Please restart the app and Sign in/Sign up.")
             return
         
-        recipeName = input("Please enter a name for your recipe")
+        recipeName = input("Please enter a name for your recipe: ")
         reviewCount = 0
         author = self.username
 
@@ -359,12 +359,12 @@ class recipes:
         for i in ingredientList:
             ingredientNumber = ingredientNumber + 1
             self.mycursor.execute("INSERT INTO Ingredients (recipe_id, ingredient_number, ingredient_name) VALUES ('{}','{}', '{}')".format(myresult[0]["maxID"], ingredientNumber, i))
-        
+        self.database.commit()
         instructionNumber = 0
         for i in instructionsList:
             instructionNumber = instructionNumber + 1
             self.mycursor.execute("INSERT INTO Instructions (recipe_id, step, description) VALUES ('{}','{}', '{}')".format(myresult[0]["maxID"], instructionNumber, i))
-
+        self.database.commit()
         return
 
     def submitReview(self, mycursor, recipe_id):
