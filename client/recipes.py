@@ -8,9 +8,11 @@ from scipy.sparse.linalg import svds
 class recipes:
 
     def __init__(self):
-        self.mycursor = self.connectToDatabase()
+        self.mycursor, self.database = self.connectToDatabase()
         self.startCLI(self.mycursor)
         self.loggedIn = False
+        self.username = ""
+        self.profileID = None
         
 
     def startCLI(self, cursor):
@@ -42,20 +44,14 @@ class recipes:
             recipesResponse = input(recipesMessage)
 
             if (recipesResponse == "11"):
-                self.findRecipeByName()
+                getRecipeName = input("Please input the name of the recipe: ")
+                self.findRecipeByName(self.mycursor, getRecipeName)
             elif (recipesResponse == "12"):
-                self.findRecipeByIngredients()
+                self.findRecipeByIngredients(self.mycursor)
             elif (recipesResponse == "13"):
                 self.findRecipeByTotalTime()
             elif (recipesResponse == "2"):
                 self.submitRecipe()
-            
-        # Once recipes are found and presented to the user
-        # The user can choose a recipe and then they will be 
-        # presented with it's ingredients, instructions and 
-        # They will get an Y/N option to view the reviews for the Recipe
-        # They will also have the option to submit a review for the Recipe if they are logged in
-
 
     def connectToDatabase(self):
         conn = mysql.connector.connect(host = 'marmoset04.shoshin.uwaterloo.ca',
@@ -65,7 +61,7 @@ class recipes:
                   use_pure=True)
 
         mycursor = conn.cursor(dictionary=True)
-        return mycursor
+        return mycursor, conn
 
 
     def findRecipeByName(self, recipeName, mycursor):
@@ -88,11 +84,53 @@ class recipes:
         
         self.getIngredientsAndInstructionsForRecipe(mycursor, recipeID)
         self.getReviewsForRecipe(mycursor, recipeID)
+        self.submitReview(self.mycursor, recipeID)
 
         return
 
-    def findRecipeByIngredients(self, ingredients, mycursor):
+    def likeClauseForIngredients(self, ingredients):
+        stringToReturn = ""
+
+        for i in ingredients:
+            if (i != ingredients[-1]):
+                recipeLike = "ingredients like '%{}%' AND ".format(i)
+                stringToReturn = stringToReturn + recipeLike
+            else:
+                recipeLike = "ingredients like '%{}%'".format(i)
+                stringToReturn = stringToReturn + recipeLike
+
+        stringToReturn = stringToReturn
+        return stringToReturn
+
+
+    def findRecipeByIngredients(self, mycursor):
+        getIngredients = input("Please enter your ingredients separated by commas. (For eg: eggs, milk, sugar)")
+        ingredients = []
+        ingredients = getIngredients.split(",")
+        like = self.likeClauseForIngredients(ingredients)
+
+        mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_id in (SELECT recipe_id From RecipeIngredients WHERE {});".format(like) )
+        myresult = mycursor.fetchall()
+
+        recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
+        print("Pick a recipe from the following list:")
+
+        i = 0
+        for x in myresult:
+            i+=1
+            recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
+            
+            print ("%i. %s" % (i, x["recipe_name"]))
+
+        userPickedRecipe = int(input("Please select a recipe: "))
+        recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
+        self.getIngredientsAndInstructionsForRecipe(mycursor, recipeID)
+        self.getReviewsForRecipe(mycursor, recipeID)
+        self.submitReview(self.mycursor, recipeID)
+        
+        return
+
 
     def getIngredientsAndInstructionsForRecipe(self, mycursor, recipeID):
 
@@ -137,7 +175,7 @@ class recipes:
                     i = i + 1
                     print ("%i. %s" % (i, x["comment"]))
 
-    def helper(preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
+    def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
         
         user_row_number = userID 
         sorted_user_predictions = preds_df.iloc[user_row_number].sort_values(ascending=False) # UserID starts at 1
@@ -149,19 +187,20 @@ class recipes:
         recommendations = (movies_df[~movies_df['recipeID'].isin(user_full['recipeID'])]).merge(pd.DataFrame(sorted_user_predictions).reset_index(), how = 'left', left_on = 'recipeID',
                 right_on = 'recipeID').rename(columns = {user_row_number: 'Predictions'}).sort_values('Predictions', ascending = False).iloc[:num_recommendations, :-1]
                       
-    return user_full, recommendations
+        return user_full, recommendations
     
     ### Takes an userID as an input
     ### Returns 5 recommendations for the userID
     ### Returns a pandas dataframe wich Recipe name and recipe ID 
-    def recommend_recipes(self, userID)
+
+    def recommend_recipes(self, userID):
         # Read MySQL tables to pandas Dataframe using pysql
                           #'mysql+pymysql://mysql_user:mysql_password@mysql_host/mysql_db'
         db_connection_str = 'mysql+pymysql://a32saini:dbhty@zRCkIT5@LY4T^4@marmoset04.shoshin.uwaterloo.ca/project_28'
         db_connection = create_engine(db_connection_str)
         # store as dataframe 
-        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=dbConnection);
-        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=dbConnection);
+        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=db_connection)
+        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=db_connection)
         
         usrID_index = -1
         # create a temp table which maps and stores profileID as index that starts from 0
@@ -208,24 +247,147 @@ class recipes:
 
         #Get recommendations
         # 5 is the number of recommendation, can change it to a different number too
-        already_rated, recommendation = helper(preds_df, userID, recipes, user_ratings_new, 5)
+        already_rated, recommendation = self.helper(preds_df, userID, recipes, user_ratings_new, 5)
 
-    #returns a pandas dataframe wich Recipe name and recipe ID 
-    # can be converted to np array if needed
-    return recommendation
+        #returns a pandas dataframe wich Recipe name and recipe ID 
+        # can be converted to np array if needed
+        return recommendation
+
+    def performSignIn(self):
+
+        getUsername = input("Please enter your username: ")
+        getPassword = input("Please enter your password: ")
+        self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND passwword = '{}';".format(getUsername, getPassword))
+        myresult = self.mycursor.fetchall()
+
+        if (len(myresult) == 0):
+            print("Incorrect Username or Password. Please restart the app and try again.")
+        else:
+            self.username = getUsername
+            self.profileID = myresult[0]["profile_id"]
+            self.loggedIn = True
+
+        return
+
+    def doesUsernameExist(self, mycursor, username):
+        mycursor.execute( "SELECT * FROM Users where username = {};".format(username) )
+        myresult = mycursor.fetchall()
+
+        newUsername = username
+
+        if (len(myresult) != 0):
+            newUsername = input("Please enter another username, as this is already taken ")
+            self.doesUsernameExist(mycursor, newUsername)
+        else:
+            return newUsername
+
+    def performSignUp(self):
+        getUsername = input("Please enter a username: ")
+        newUsername = self.doesUsernameExist(self.mycursor, getUsername)
+        getPassword = input("Please enter a password: ")
+        self.mycursor.execute( "INSERT INTO Users (username, passwword) VALUES ({},{});".format(newUsername, getPassword) )
+        self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND passwword = '{}';".format(newUsername, getPassword))
+        myresult = self.mycursor.fetchall()
+        self.database.commit()
+        self.username = newUsername
+        self.profileID = myresult[0]["profile_id"]
+        self.loggedIn = True
+        return
+
+    def findRecipeByTotalTime(self):
+
+        getMaxTime = int(input("Please enter the maximum amount of time in minutes"))
+        self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where total_time <= {};".format(getMaxTime) )
+        myresult = self.mycursor.fetchall()
+
+        recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
+        print("Pick a recipe from the following list:")
+
+        i = 0
+        for x in myresult:
+            i+=1
+            recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
+            
+            print ("%i. %s" % (i, x["recipe_name"]))
+
+        userPickedRecipe = int(input("Please select a recipe: "))
+        recipeID = recipesWithID[userPickedRecipe - 1].recipeID
+        
+        self.getIngredientsAndInstructionsForRecipe(self.mycursor, recipeID)
+        self.getReviewsForRecipe(self.mycursor, recipeID)
+        self.submitReview(self.mycursor, recipeID)
+        
+        return
+
+
+    def submitRecipe(self):
+
+        if (not (self.loggedIn)):
+            print("You are not logged in. Please restart the app and Sign in/Sign up.")
+            return
+        
+        recipeName = input("Please enter a name for your recipe")
+        reviewCount = 0
+        author = self.username
+
+        ingredientList = []
+        ingredients = input("Please input all ingredients, along with their amount, separated by commas: ")
+        ingredientList = ingredients.split(",")
+
+        instructionsList = []
+
+        print("Please input instructions step by step. Once you are done, enter '1' ")
+
+        while(True):
+            instructionToAdd = input("Instruction: ")
+            if(instructionToAdd == "1"):
+                break
+            instructionsList.append(instructionToAdd)
+        
+
+        prepare_time = int(input("Please enter the preparation time in minutes: "))
+        cook_time = int(input("Please enter the cook time in minutes: "))
+        total_time = prepare_time + cook_time
+        self.mycursor.execute("INSERT INTO CleanRecipes (recipe_name, review_count, recipe_photo, author, prepare_time, cook_time, total_time) VALUES ('{}', '{}', 'no photo', '{}', '{}', '{}', '{}');".format(recipeName, reviewCount, author, prepare_time, cook_time, total_time))
+        self.database.commit()
+
+        self.mycursor.execute("SELECT max(recipe_id) as maxID FROM CleanRecipes")
+        myresult = self.mycursor.fetchall()
+        self.mycursor.execute("INSERT INTO RecipeIngredients (recipe_id, ingredients) VALUES ('{}','{}')".format(myresult[0]["maxID"], ingredients))
+
+        ingredientNumber = 0
+        for i in ingredientList:
+            ingredientNumber = ingredientNumber + 1
+            self.mycursor.execute("INSERT INTO Ingredients (recipe_id, ingredient_number, ingredient_name) VALUES ('{}','{}', '{}')".format(myresult[0]["maxID"], ingredientNumber, i))
+        
+        instructionNumber = 0
+        for i in instructionsList:
+            instructionNumber = instructionNumber + 1
+            self.mycursor.execute("INSERT INTO Instructions (recipe_id, step, description) VALUES ('{}','{}', '{}')".format(myresult[0]["maxID"], instructionNumber, i))
+
+        return
+
+    def submitReview(self, mycursor, recipe_id):
+
+        getReviewsResponse = input("Would you like to leave a review for this recipe? (Y/N): ")
+        if(getReviewsResponse == "N"):
+            return
+        elif(getReviewsResponse == "Y"):
+
+            if (not self.loggedIn):
+                print("You need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up")
+                return
+            else:
+                getRating = int(input("Please enter a rating from 1-5: "))
+                getReviewComments = input("Please enter some comments: ")
+
+                self.mycursor.execute("INSERT INTO CleanReviews (recipe_id, profile_id, rate, comment) VALUES ('{}','{}','{}','{}')".format(recipe_id, self.profileID, getRating, getReviewComments))
+                self.database.commit()
+                self.mycursor.execute("SELECT numOfReviews FROM Users WHERE profile_id = '{}'".format(self.profileID))
+                myresult = self.mycursor.fetchall()
+                numReviews = int(myresult[0]["numOfReviews"]) + 1
+                self.mycursor.execute("UPDATE Users SET numOfReviews = '{}' WHERE profile_id = '{}'".format(numReviews, self.profileID))
+                self.database.commit()
 
 
         
-        
-    
-    # def performSignIn(self):
-
-    # def performSignUp(self):
-    
-    # def findRecipeByIngredients(self):
-
-    # def findRecipeByTotalTime(self):
-
-    # def submitRecipe(self):
-
-    # def submitReview(self):
