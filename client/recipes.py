@@ -172,7 +172,7 @@ class recipes:
         self.checkConn()
         yesOrNoReviews = input("\nWould you like to view Reviews for this Recipe? (Y/N): ")
         yesOrNoReviews = self.inputValidater(yesOrNoReviews, ['Y', 'N', 'y', 'n'])
-        if (yesOrNoReviews == "Y"):
+        if (yesOrNoReviews == "Y" or yesOrNoReviews == "y"):
             filterByRating = input("\nWould you like to filter Reviews by Ratings? (Y/N): ")
             filterByRating = self.inputValidater(filterByRating, ['Y', 'N', 'y', 'n'])
             if(filterByRating == "Y"):
@@ -182,17 +182,25 @@ class recipes:
                 myresult = self.mycursor.fetchall()
                 
                 i = 0
-                for x in myresult:
-                    i = i + 1
-                    print ("%i. %s" % (i, x["comment"]))
 
-            elif(filterByRating == "N"):
+                if(len(myresult) == 0):
+                    print("\nThere are no reviews for this recipe")
+                else:
+
+                    for x in myresult:
+                        i = i + 1
+                        print("\nRating: %i STARS" % (x["rate"]))
+                        print ("%i. %s" % (i, x["comment"]))
+                
+
+            elif(filterByRating == "N" or filterByRating == "n"):
                 self.mycursor.execute(" SELECT rate, comment From CleanReviews WHERE recipe_id = '{}';".format(recipeID))
                 myresult = self.mycursor.fetchall()
                 
                 i = 0
                 for x in myresult:
                     i = i + 1
+                    print("\nRating: %i STARS" % (x["rate"]))
                     print ("%i. %s" % (i, x["comment"]))
 
     def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
@@ -393,9 +401,10 @@ class recipes:
     def submitReview(self, recipe_id):
         self.checkConn()
         getReviewsResponse = input("\nWould you like to leave a review for this recipe? (Y/N): ")
-        if(getReviewsResponse == "N"):
+        getReviewsResponse = self.inputValidater(getReviewsResponse, ['Y','y','N','n'])
+        if(getReviewsResponse == "N" or getReviewsResponse == "n"):
             return
-        elif(getReviewsResponse == "Y"):
+        elif(getReviewsResponse == "Y" or getReviewsResponse == "y"):
 
             if (self.loggedIn == False):
                 print("\nYou need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up.")
