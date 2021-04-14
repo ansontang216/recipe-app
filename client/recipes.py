@@ -9,41 +9,48 @@ import numpy as np
 
 class recipes:
 
-    def __init__(self):
+    def __init__(self, loggedIn, profileID, username):
+        self.loggedIn = loggedIn
+        self.username = username
+        self.profileID = profileID
         self.mycursor, self.database = self.connectToDatabase()
         self.startCLI()
-        self.loggedIn = False
-        self.username = ""
-        self.profileID = 0
+        
 
     def startCLI(self):
         
-        loginResponse = input("Would you like to Log In/Sign Up? (Y/N): ")
-
-        if (loginResponse == "Y"):
-            signingIn = """1. Sign In\n2. Sign Up """
+        loginResponse = input("\nWould you like to Log In/Sign Up? (Y/N): ")
+        loginResponse = self.inputValidater(loginResponse, ['Y', 'N', 'y', 'n'])
+        
+        if (loginResponse == "Y" or loginResponse == "y"):
+            signingIn = """\n1. Sign In\n2. Sign Up \nPlease pick an option (1,2): """
             
             signingInResponse = input(signingIn)
-
+            signingInResponse = self.inputValidater(signingInResponse, ['1', '2'])
+            
             if (signingInResponse == "1"):
-                print("Peforming sign in..")
                 self.performSignIn()
+                if(self.loggedIn == False):
+                    return
             elif (signingInResponse == "2"):
                 self.performSignUp()
+                if(self.loggedIn == False):
+                    return
         else:
             self.loggedIn = False
             
-        openingMessage = """1. Recipes\n2. Recommend recipes to me"""
-
+        openingMessage = """\n1. Recipes\n2. Recommend recipes to me\nPlease pick an option (1,2): """
+        
         firstResponse = input(openingMessage)
-
+        firstResponse = self.inputValidater(firstResponse, ['1', '2'])
+        
         if (firstResponse == "1"):
-            recipesMessage = """1. Find Recipe:\n11. Find Recipe by Name\n12. Find Recipe by Ingredients\n13. Find Recipe by Total Time\n2. Submit Recipe"""
+            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n2. Submit Recipe\nPlease pick an option (11,12,13,2): """
 
             recipesResponse = input(recipesMessage)
-
+            recipesResponse = self.inputValidater(recipesResponse, ['11', '12', '13', '2'])
             if (recipesResponse == "11"):
-                getRecipeName = input("Please input the name of the recipe: ")
+                getRecipeName = input("\nPlease input the name of the recipe: ")
                 self.findRecipeByName(getRecipeName)
             elif (recipesResponse == "12"):
                 self.findRecipeByIngredients()
@@ -66,26 +73,29 @@ class recipes:
                   database = 'project_28',
                   use_pure=True)
 
-        mycursor = conn.cursor(dictionary=True)
+        mycursor = conn.cursor(dictionary=True, buffered=True)
         return mycursor, conn
 
 
     def findRecipeByName(self, recipeName):
-        
+        self.checkConn()
         self.mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE recipe_name like '%{}%';".format(recipeName))
         myresult = self.mycursor.fetchall()
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
-        print("Pick a recipe from the following list:")
+        print("\nPick a recipe from the following list:\n")
 
+        validResponse = []
         i = 0
         for x in myresult:
             i+=1
+            validResponse.append(i)
             recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
             
             print ("%i. %s" % (i, x["recipe_name"]))
 
-        userPickedRecipe = int(input("Please select a recipe: "))
+        userPickedRecipe = int(input("\nPlease select a recipe: "))
+        userPickedRecipe = self.inputValidaterInt(userPickedRecipe, validResponse)
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
         self.getIngredientsAndInstructionsForRecipe(recipeID)
@@ -110,7 +120,8 @@ class recipes:
 
 
     def findRecipeByIngredients(self):
-        getIngredients = input("Please enter your ingredients separated by commas. (For eg: eggs, milk, sugar)")
+        self.checkConn()
+        getIngredients = input("\nPlease enter your ingredients separated by commas. (For eg: eggs, milk, sugar): ")
         ingredients = []
         ingredients = getIngredients.split(",")
         like = self.likeClauseForIngredients(ingredients)
@@ -119,16 +130,19 @@ class recipes:
         myresult = self.mycursor.fetchall()
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
-        print("Pick a recipe from the following list:")
+        print("\nPick a recipe from the following list:\n")
 
+        validResponse = []
         i = 0
         for x in myresult:
             i+=1
+            validResponse.append(i)
             recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
             
             print ("%i. %s" % (i, x["recipe_name"]))
 
-        userPickedRecipe = int(input("Please select a recipe: "))
+        userPickedRecipe = int(input("\nPlease select a recipe: "))
+        userPickedRecipe = self.inputValidaterInt(userPickedRecipe, validResponse)
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
         self.getIngredientsAndInstructionsForRecipe(recipeID)
@@ -139,31 +153,31 @@ class recipes:
 
 
     def getIngredientsAndInstructionsForRecipe(self, recipeID):
-
+        self.checkConn()
         self.mycursor.execute("SELECT ingredient_number, ingredient_name From Ingredients WHERE recipe_id = '{}' ORDER BY ingredient_number ASC;".format(recipeID))
         myresult = self.mycursor.fetchall()
-        
+        print("\nIngredients for Recipe: ")
         for x in myresult:
             print ("%s. %s" % (x["ingredient_number"], x["ingredient_name"]))
 
         self.mycursor.execute(" SELECT step, description From Instructions WHERE recipe_id = '{}' ORDER BY step ASC;".format(recipeID))
         myresult = self.mycursor.fetchall()
-
+        print("\nInstructions for Recipe: ")
         for x in myresult:
             print ("%s. %s" % (x["step"], x["description"]))
 
         return
 
     def getReviewsForRecipe(self, recipeID):
-
-        yesOrNoReviews = input("Would you like to view Reviews for this Recipe? (Y/N)")
-
+        self.checkConn()
+        yesOrNoReviews = input("\nWould you like to view Reviews for this Recipe? (Y/N): ")
+        yesOrNoReviews = self.inputValidater(yesOrNoReviews, ['Y', 'N', 'y', 'n'])
         if (yesOrNoReviews == "Y"):
-            filterByRating = input("Would you like to filter Reviews by Ratings? (Y/N)")
-
+            filterByRating = input("\nWould you like to filter Reviews by Ratings? (Y/N): ")
+            filterByRating = self.inputValidater(filterByRating, ['Y', 'N', 'y', 'n'])
             if(filterByRating == "Y"):
                 getMinimumRating = int(input("Select a minimum rating from 1-5 "))
-            
+                getMinimumRating = self.inputValidaterInt(getMinimumRating, [1, 2, 3, 4, 5])
                 self.mycursor.execute(" SELECT rate, comment From CleanReviews WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
                 myresult = self.mycursor.fetchall()
                 
@@ -182,7 +196,7 @@ class recipes:
                     print ("%i. %s" % (i, x["comment"]))
 
     def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
-    
+        
         user_row_number = userID 
         sorted_user_predictions = preds_df.iloc[user_row_number].sort_values(ascending=False) # UserID starts at 1
 
@@ -199,11 +213,11 @@ class recipes:
 
         db_connection_str = 'mysql+pymysql://a32saini:dbhty@zRCkIT5@LY4T^4@marmoset04.shoshin.uwaterloo.ca/project_28'
         db_connection = create_engine(db_connection_str)
-    
-        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=db_connection)
-        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=db_connection)
+        conn = db_connection.connect()
+        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=conn)
+        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=conn)
         
-
+        
         usrID_index = -1
         # create a temp table which maps and stores profileID as index that starts from 0
         temp = reviews.sort_values("profile_id").reset_index(drop=True)
@@ -254,11 +268,13 @@ class recipes:
         
         #returns a pandas dataframe wich Recipe name and recipe ID 
         # can be converted to np array if needed
+        conn.close()
+        db_connection.dispose()
         return recommendation
 
     def performSignIn(self):
-
-        getUsername = input("Please enter your username: ")
+        self.checkConn()
+        getUsername = input("\nPlease enter your username: ")
         getPassword = input("Please enter your password: ")
         self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND password = '{}';".format(getUsername, getPassword))
         myresult = self.mycursor.fetchall()
@@ -272,19 +288,21 @@ class recipes:
         return
 
     def doesUsernameExist(self, username):
+        
         self.mycursor.execute( "SELECT * FROM Users where username = '{}';".format(username) )
         myresult = self.mycursor.fetchall()
 
         newUsername = username
 
         if (len(myresult) != 0):
-            newUsername = input("Please enter another username, as this is already taken ")
+            newUsername = input("\nPlease enter another username, as this is already taken: ")
             self.doesUsernameExist(newUsername)
         else:
             return newUsername
 
     def performSignUp(self):
-        getUsername = input("Please enter a username: ")
+        self.checkConn()
+        getUsername = input("\nPlease enter a username: ")
         newUsername = self.doesUsernameExist(getUsername)
         getPassword = input("Please enter a password: ")
         self.mycursor.execute( "INSERT INTO Users (username, password) VALUES ('{}','{}');".format(newUsername, getPassword) )
@@ -297,22 +315,25 @@ class recipes:
         return
 
     def findRecipeByTotalTime(self):
-
-        getMaxTime = int(input("Please enter the maximum amount of time in minutes"))
+        self.checkConn()
+        getMaxTime = int(input("\nPlease enter the maximum amount of time in minutes: "))
         self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where total_time <= {};".format(getMaxTime) )
         myresult = self.mycursor.fetchall()
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
         print("Pick a recipe from the following list:")
 
+        validResponse = []
         i = 0
         for x in myresult:
             i+=1
+            validResponse.append(i)
             recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
             
             print ("%i. %s" % (i, x["recipe_name"]))
 
         userPickedRecipe = int(input("Please select a recipe: "))
+        userPickedRecipe = self.inputValidaterInt(userPickedRecipe, validResponse)
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
         self.getIngredientsAndInstructionsForRecipe(recipeID)
@@ -323,22 +344,22 @@ class recipes:
 
 
     def submitRecipe(self):
-
+        self.checkConn()
         if (not (self.loggedIn)):
-            print("You are not logged in. Please restart the app and Sign in/Sign up.")
+            print("\nYou are not logged in. Please restart the app and Sign in/Sign up.")
             return
         
-        recipeName = input("Please enter a name for your recipe: ")
+        recipeName = input("\nPlease enter a name for your recipe: ")
         reviewCount = 0
         author = self.username
 
         ingredientList = []
-        ingredients = input("Please input all ingredients, along with their amount, separated by commas: ")
+        ingredients = input("\nPlease input all ingredients, along with their amount, separated by commas: ")
         ingredientList = ingredients.split(",")
 
         instructionsList = []
 
-        print("Please input instructions step by step. Once you are done, enter '1' ")
+        print("\nPlease input instructions step by step. Once you are done, enter '1' ")
 
         while(True):
             instructionToAdd = input("Instruction: ")
@@ -347,7 +368,7 @@ class recipes:
             instructionsList.append(instructionToAdd)
         
 
-        prepare_time = int(input("Please enter the preparation time in minutes: "))
+        prepare_time = int(input("\nPlease enter the preparation time in minutes: "))
         cook_time = int(input("Please enter the cook time in minutes: "))
         total_time = prepare_time + cook_time
         self.mycursor.execute("INSERT INTO CleanRecipes (recipe_name, review_count, recipe_photo, author, prepare_time, cook_time, total_time) VALUES ('{}', '{}', 'no photo', '{}', '{}', '{}', '{}');".format(recipeName, reviewCount, author, prepare_time, cook_time, total_time))
@@ -370,18 +391,19 @@ class recipes:
         return
 
     def submitReview(self, recipe_id):
-
-        getReviewsResponse = input("Would you like to leave a review for this recipe? (Y/N): ")
+        self.checkConn()
+        getReviewsResponse = input("\nWould you like to leave a review for this recipe? (Y/N): ")
         if(getReviewsResponse == "N"):
             return
         elif(getReviewsResponse == "Y"):
 
             if (self.loggedIn == False):
-                print("You need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up.")
+                print("\nYou need to be logged in to be able to leave a review. Please restart the app and Sign In/Sign Up.")
                 return
             else:
-                getRating = int(input("Please enter a rating from 1-5: "))
-                getReviewComments = input("Please enter some comments: ")
+                getRating = int(input("\nPlease enter a rating from 1-5: "))
+                getRating = self.inputValidaterInt(getRating, [1, 2, 3, 4, 5])
+                getReviewComments = input("\nPlease enter some comments: ")
 
                 self.mycursor.execute("INSERT INTO CleanReviews (recipe_id, profile_id, rate, comment) VALUES ('{}','{}','{}','{}')".format(recipe_id, self.profileID, getRating, getReviewComments))
                 self.database.commit()
@@ -394,18 +416,21 @@ class recipes:
                 self.database.commit()
 
     def getRecipesFromDataframe(self, recipes):
-
+        self.checkConn()
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
-        print("Pick a recipe from the following list:")
+        print("\nPick a recipe from the following list:\n")
 
         i = 0
+        validValues = []
         for index, x in recipes.iterrows():
             i+=1
+            validValues.append(i)
             recipesWithID.append(recipe(x['recipe_name'], x['recipe_id'], i))
             
             print ("%i. %s" % (i, x['recipe_name']))
 
-        userPickedRecipe = int(input("Please select a recipe: "))
+        userPickedRecipe = int(input("\nPlease select a recipe: "))
+        userPickedRecipe = self.inputValidaterInt(userPickedRecipe, validValues)
         recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
         self.getIngredientsAndInstructionsForRecipe(recipeID)
@@ -413,3 +438,35 @@ class recipes:
         self.submitReview(recipeID)
 
         return
+
+    def inputValidater(self, userInput, validInput):
+        
+        for x in validInput:
+            if (userInput == x):
+                return userInput
+    
+        reenterInput = input("\nPlease enter a valid input. Choose from {}: ".format(validInput))
+        return self.inputValidater(reenterInput, validInput)
+
+    def inputValidaterInt(self, userInput, validInput):
+        
+        for x in validInput:
+            if (userInput == x):
+                return userInput
+            else:
+                continue
+        reenterInput = int(input("\nPlease enter a valid input. Choose from {}: ".format(validInput)))
+        return self.inputValidater(reenterInput, validInput)
+
+    def checkConn(self):
+        sq = "SELECT NOW()"
+        try:
+            self.mycursor.execute( sq )
+        except pymysql.Error as e:
+            if e.errno == 2006:
+                self.mycursor = self.connectToDatabase()
+            else:
+                print ( "No connection with database." )
+        return
+
+    

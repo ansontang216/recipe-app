@@ -1,3 +1,3 @@
 from recipes import recipes
 
-recipess = recipes()
+recipess = recipes(False, 0, "nouser")
