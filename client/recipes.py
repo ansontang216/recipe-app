@@ -395,11 +395,13 @@ class recipes:
             return
         
         recipeName = input("\nPlease enter a name for your recipe: ")
+        recipeName = self.replaceApostrophe(recipeName)
         reviewCount = 0
         author = self.username
 
         ingredientList = []
         ingredients = input("\nPlease input all ingredients, along with their amount, separated by commas: ")
+        ingredients = self.replaceApostrophe(ingredients)
         ingredientList = ingredients.split(",")
 
         instructionsList = []
@@ -408,6 +410,7 @@ class recipes:
 
         while(True):
             instructionToAdd = input("Instruction: ")
+            instructionToAdd = self.replaceApostrophe(instructionToAdd)
             if(instructionToAdd == "1"):
                 break
             instructionsList.append(instructionToAdd)
@@ -425,6 +428,7 @@ class recipes:
 
         ingredientNumber = 0
         for i in ingredientList:
+            i = self.replaceApostrophe(i)
             ingredientNumber = ingredientNumber + 1
             self.mycursor.execute("INSERT INTO Ingredients (recipe_id, ingredient_number, ingredient_name) VALUES ('{}','{}', '{}')".format(myresult[0]["maxID"], ingredientNumber, i))
         self.database.commit()
@@ -450,7 +454,7 @@ class recipes:
                 getRating = int(input("\nPlease enter a rating from 1-5: "))
                 getRating = self.inputValidaterInt(getRating, [1, 2, 3, 4, 5])
                 getReviewComments = input("\nPlease enter some comments: ")
-
+                getReviewComments = self.replaceApostrophe(getReviewComments)
                 self.mycursor.execute("INSERT INTO CleanReviews (recipe_id, profile_id, rate, comment) VALUES ('{}','{}','{}','{}')".format(recipe_id, self.profileID, getRating, getReviewComments))
                 self.database.commit()
                 self.mycursor.execute("SELECT numOfReviews FROM Users WHERE profile_id = '{}'".format(self.profileID))
