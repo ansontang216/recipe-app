@@ -525,7 +525,6 @@ class recipes:
             return
         else:
             numReviews = myresult[0]["numOfReviews"]
-            print(numReviews)
 
         if (int(numReviews) < 1):
             return False
