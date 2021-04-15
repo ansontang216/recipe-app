@@ -16,6 +16,7 @@ class recipes:
         self.mycursor, self.database = self.connectToDatabase()
         self.startCLI()
         
+        
 
     def startCLI(self):
         
@@ -45,10 +46,10 @@ class recipes:
         firstResponse = self.inputValidater(firstResponse, ['1', '2'])
         
         if (firstResponse == "1"):
-            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n2. Submit Recipe\nPlease pick an option (11,12,13,2): """
+            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n\t14. Search using all parameters\n2. Submit Recipe\nPlease pick an option (11,12,13,2): """
 
             recipesResponse = input(recipesMessage)
-            recipesResponse = self.inputValidater(recipesResponse, ['11', '12', '13', '2'])
+            recipesResponse = self.inputValidater(recipesResponse, ['11', '12', '13', '14', '2'])
             if (recipesResponse == "11"):
                 getRecipeName = input("\nPlease input the name of the recipe: ")
                 self.findRecipeByName(getRecipeName)
@@ -56,6 +57,8 @@ class recipes:
                 self.findRecipeByIngredients()
             elif (recipesResponse == "13"):
                 self.findRecipeByTotalTime()
+            elif (recipesResponse == "14"):
+                self.fullSearchRecipes()
             elif (recipesResponse == "2"):
                 self.submitRecipe()
 
@@ -118,9 +121,9 @@ class recipes:
 
     def likeClauseForIngredients(self, ingredients):
         stringToReturn = ""
-
+        
         for i in ingredients:
-            i = i.self.replaceApostrophe(i)
+            i = self.replaceApostrophe(i)
             if (i != ingredients[-1]):
                 recipeLike = "ingredients like '%{}%' AND ".format(i)
                 stringToReturn = stringToReturn + recipeLike
@@ -183,6 +186,12 @@ class recipes:
         for x in myresult:
             print ("%s. %s" % (x["step"], x["description"]))
 
+        self.mycursor.execute(" SELECT prepare_time, cook_time From CleanRecipes WHERE recipe_id = '{}';".format(recipeID))
+        time = self.mycursor.fetchall()
+
+        print("\nPrep time: {} minutes".format(time[0]["prepare_time"]))
+        print("Cooking time: {} minutes".format(time[0]["cook_time"]))
+
         return
 
     def getReviewsForRecipe(self, recipeID):
@@ -218,6 +227,8 @@ class recipes:
                 if(len(myresult) == 0):
                     print("\nThere are no reviews for this recipe.")
                 else:
+                    print("We here")
+                    print(len(myresult))
                     for x in myresult:
                         i = i + 1
                         print("\nRating: %i STARS" % (x["rate"]))
@@ -524,9 +535,56 @@ class recipes:
     def replaceApostrophe(self, input):
         return input.replace("'", "")
     
+    def fullSearchRecipes(self):
+        self.checkConn()
+        getRecipeName = input("\nPlease input the name of the recipe. Enter 'Any' to skip this: ")
+        getRecipeName = self.replaceApostrophe(getRecipeName)
 
+        getIngredients = input("\nPlease enter your ingredients separated by commas. Enter 'Any' to skip this. (For eg: eggs, milk, sugar): ")
+        ingredients = []
+        if(getIngredients == 'Any' or getIngredients == 'any'):
+            like = "ingredients like '%%'"
+        else:
+            ingredients = getIngredients.split(",")
+            like = self.likeClauseForIngredients(ingredients)
 
+        getMaxTime = (input("\nPlease enter the maximum amount of time in minutes. Enter 'Any' to skip this: "))
         
+        if(getMaxTime == 'Any' or getMaxTime == 'any'):
+            getMaxTime = 99999999
+        else:
+            getMaxTime = int(getMaxTime)
 
+        if(getRecipeName == 'Any' or getRecipeName == 'any'):
+            getRecipeName = ""
+
+        print( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_name like '%{}%' AND total_time <= {} AND recipe_id IN (SELECT recipe_id From RecipeIngredients WHERE {});".format(getRecipeName, getMaxTime, like))
+        self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_name like '%{}%' AND total_time <= {} AND recipe_id IN (SELECT recipe_id From RecipeIngredients WHERE {});".format(getRecipeName, getMaxTime, like))
+
+        myresult = self.mycursor.fetchall()
+        if (len(myresult) == 0):
+            print("There were no recipes by that time limit.")
+            return
+        recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
+        print("Pick a recipe from the following list:")
+
+        validResponse = []
+        i = 0
+        for x in myresult:
+            i+=1
+            validResponse.append(i)
+            recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
+            
+            print ("%i. %s" % (i, x["recipe_name"]))
+
+        userPickedRecipe = int(input("Please select a recipe: "))
+        userPickedRecipe = self.inputValidaterInt(userPickedRecipe, validResponse)
+        recipeID = recipesWithID[userPickedRecipe - 1].recipeID
         
+        self.getIngredientsAndInstructionsForRecipe(recipeID)
+        self.getReviewsForRecipe(recipeID)
+        self.submitReview(recipeID)
+        
+        return
+
             
