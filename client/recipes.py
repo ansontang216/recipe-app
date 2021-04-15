@@ -1,5 +1,5 @@
-import os
 import mysql.connector
+from mysql.connector.errors import Error
 from recipe import recipe
 from sqlalchemy import create_engine
 import pymysql
@@ -60,8 +60,14 @@ class recipes:
                 self.submitRecipe()
 
         elif (firstResponse == "2"):
-            recommendedRecipes = self.recommend_recipes(self.profileID)
-            self.getRecipesFromDataframe(recommendedRecipes)
+            if (not self.loggedIn):
+                print("You need to be logged in to have recipes recommended to you. Please Sign In/Sign Up.")
+            else:
+                if(not self.getNumOfReviews(self.profileID)):
+                    print("You need to review at least 1 recipe to get recommendations. Check out some recipes and leave some reviews. The more reviews you leave - the better the recommendations!")
+                else:
+                    recommendedRecipes = self.recommend_recipes(self.profileID)
+                    self.getRecipesFromDataframe(recommendedRecipes)
 
         return
 
@@ -79,8 +85,14 @@ class recipes:
 
     def findRecipeByName(self, recipeName):
         self.checkConn()
+        
+        recipeName = self.replaceApostrophe(recipeName)
         self.mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE recipe_name like '%{}%';".format(recipeName))
         myresult = self.mycursor.fetchall()
+
+        if (len(myresult) == 0):
+            print("There were no recipes by that name. Please restart and try a different name.")
+            return
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
         print("\nPick a recipe from the following list:\n")
@@ -108,6 +120,7 @@ class recipes:
         stringToReturn = ""
 
         for i in ingredients:
+            i = i.self.replaceApostrophe(i)
             if (i != ingredients[-1]):
                 recipeLike = "ingredients like '%{}%' AND ".format(i)
                 stringToReturn = stringToReturn + recipeLike
@@ -128,6 +141,10 @@ class recipes:
 
         self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_id in (SELECT recipe_id From RecipeIngredients WHERE {});".format(like) )
         myresult = self.mycursor.fetchall()
+
+        if (len(myresult) == 0):
+            print("There were no recipes with that combination of Ingredients.")
+            return
 
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
         print("\nPick a recipe from the following list:\n")
@@ -184,7 +201,7 @@ class recipes:
                 i = 0
 
                 if(len(myresult) == 0):
-                    print("\nThere are no reviews for this recipe")
+                    print("\nThere are no reviews for this recipe.")
                 else:
 
                     for x in myresult:
@@ -198,10 +215,13 @@ class recipes:
                 myresult = self.mycursor.fetchall()
                 
                 i = 0
-                for x in myresult:
-                    i = i + 1
-                    print("\nRating: %i STARS" % (x["rate"]))
-                    print ("%i. %s" % (i, x["comment"]))
+                if(len(myresult) == 0):
+                    print("\nThere are no reviews for this recipe.")
+                else:
+                    for x in myresult:
+                        i = i + 1
+                        print("\nRating: %i STARS" % (x["rate"]))
+                        print ("%i. %s" % (i, x["comment"]))
 
     def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
         
@@ -284,6 +304,8 @@ class recipes:
         self.checkConn()
         getUsername = input("\nPlease enter your username: ")
         getPassword = input("Please enter your password: ")
+        getUsername = self.replaceApostrophe(getUsername)
+        getPassword = self.replaceApostrophe(getPassword)
         self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND password = '{}';".format(getUsername, getPassword))
         myresult = self.mycursor.fetchall()
         if (len(myresult) == 0):
@@ -296,7 +318,7 @@ class recipes:
         return
 
     def doesUsernameExist(self, username):
-        
+        self.checkConn()
         self.mycursor.execute( "SELECT * FROM Users where username = '{}';".format(username) )
         myresult = self.mycursor.fetchall()
 
@@ -313,6 +335,8 @@ class recipes:
         getUsername = input("\nPlease enter a username: ")
         newUsername = self.doesUsernameExist(getUsername)
         getPassword = input("Please enter a password: ")
+        getUsername = self.replaceApostrophe(getUsername)
+        getPassword = self.replaceApostrophe(getPassword)
         self.mycursor.execute( "INSERT INTO Users (username, password) VALUES ('{}','{}');".format(newUsername, getPassword) )
         self.database.commit()
         self.mycursor.execute( "SELECT profile_id FROM Users where username = '{}' AND password = '{}';".format(newUsername, getPassword))
@@ -327,7 +351,9 @@ class recipes:
         getMaxTime = int(input("\nPlease enter the maximum amount of time in minutes: "))
         self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where total_time <= {};".format(getMaxTime) )
         myresult = self.mycursor.fetchall()
-
+        if (len(myresult) == 0):
+            print("There were no recipes by that time limit.")
+            return
         recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
         print("Pick a recipe from the following list:")
 
@@ -471,11 +497,36 @@ class recipes:
         sq = "SELECT NOW()"
         try:
             self.mycursor.execute( sq )
-        except pymysql.Error as e:
+        except mysql.connector.Error as e:
             if e.errno == 2006:
-                self.mycursor = self.connectToDatabase()
+                self.mycursor, self.database = self.connectToDatabase()
             else:
-                print ( "No connection with database." )
+                print ( "No connection with database. Please check your internet connection and try again." )
         return
 
+    def getNumOfReviews(self, profileID):
+        self.checkConn()
+
+        self.mycursor.execute( "SELECT numOfReviews FROM Users where profile_id = '{}';".format(profileID))
+        myresult = self.mycursor.fetchall()
+        if (len(myresult) == 0):
+            print("Error: User doesn't exist. Restar the app and Sign Up")
+            return
+        else:
+            numReviews = myresult[0]["numOfReviews"]
+            print(numReviews)
+
+        if (int(numReviews) < 1):
+            return False
+        else:
+            return True
     
+    def replaceApostrophe(self, input):
+        return input.replace("'", "")
+    
+
+
+        
+
+        
+            
