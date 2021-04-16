@@ -15,8 +15,6 @@ class recipes:
         self.profileID = profileID
         self.mycursor, self.database = self.connectToDatabase()
         self.startCLI()
-        
-        
 
     def startCLI(self):
         
@@ -46,10 +44,10 @@ class recipes:
         firstResponse = self.inputValidater(firstResponse, ['1', '2'])
         
         if (firstResponse == "1"):
-            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n\t14. Search using all parameters\n2. Submit Recipe\nPlease pick an option (11,12,13,2): """
+            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n\t14. Search using all parameters\n2. Submit Recipe\n3. View and Edit your Recipes\nPlease pick an option (11,12,13,2,3): """
 
             recipesResponse = input(recipesMessage)
-            recipesResponse = self.inputValidater(recipesResponse, ['11', '12', '13', '14', '2'])
+            recipesResponse = self.inputValidater(recipesResponse, ['11', '12', '13', '14', '2', '3'])
             if (recipesResponse == "11"):
                 getRecipeName = input("\nPlease input the name of the recipe: ")
                 self.findRecipeByName(getRecipeName)
@@ -61,6 +59,9 @@ class recipes:
                 self.fullSearchRecipes()
             elif (recipesResponse == "2"):
                 self.submitRecipe()
+            elif (recipesResponse == "3"):
+                self.showUsersRecipes()
+
 
         elif (firstResponse == "2"):
             if (not self.loggedIn):
@@ -455,6 +456,11 @@ class recipes:
                 getRating = self.inputValidaterInt(getRating, [1, 2, 3, 4, 5])
                 getReviewComments = input("\nPlease enter some comments: ")
                 getReviewComments = self.replaceApostrophe(getReviewComments)
+                self.mycursor.execute("SELECT review_count FROM CleanRecipes WHERE recipe_id = '{}'".format(recipe_id))
+                countResult = self.mycursor.fetchall()
+                countReviews = 0
+                countReviews = countResult[0]["review_count"] + 1
+                self.mycursor.execute("UPDATE CleanRecipes SET review_count = '{}' WHERE recipe_id = '{}'".format(countReviews, recipe_id))
                 self.mycursor.execute("INSERT INTO CleanReviews (recipe_id, profile_id, rate, comment) VALUES ('{}','{}','{}','{}')".format(recipe_id, self.profileID, getRating, getReviewComments))
                 self.database.commit()
                 self.mycursor.execute("SELECT numOfReviews FROM Users WHERE profile_id = '{}'".format(self.profileID))
@@ -591,3 +597,84 @@ class recipes:
         return
 
             
+    def showUsersRecipes(self):
+
+        if(not self.loggedIn):
+            print("\nYou are not logged in. Please restart the app and sign in/sign up")
+            return
+        else:
+            print(self.username)
+            self.mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE author = '{}';".format(self.username))
+            myresult = self.mycursor.fetchall()
+            if (len(myresult) == 0):
+                print("You have not submitted any recipes yet")
+                return
+            else:
+
+                recipesWithID = [] # add each recipe along with it's ID over here and present these to the user
+                print("\nPick a recipe from the following list:\n")
+
+                validResponse = []
+                i = 0
+                for x in myresult:
+                    i+=1
+                    validResponse.append(i)
+                    recipesWithID.append(recipe(x["recipe_name"], x["recipe_id"], i))
+                    
+                    print ("%i. %s" % (i, x["recipe_name"]))
+
+                userPickedRecipe = int(input("\nPlease select a recipe: "))
+                userPickedRecipe = self.inputValidaterInt(userPickedRecipe, validResponse)
+                recipeID = recipesWithID[userPickedRecipe - 1].recipeID
+                self.getIngredientsAndInstructionsForRecipe(recipeID)
+
+                editRecipe = input("Would you like to edit your recipe? (Y/N): ")
+                editRecipe = self.inputValidater(editRecipe, ['Y', 'N', 'y', 'n'])
+                
+                if (editRecipe == "Y" or editRecipe == "y"):
+
+                    recipeName = input("\nPlease enter a name for your recipe: ")
+                    recipeName = self.replaceApostrophe(recipeName)
+                    author = self.username
+
+                    ingredientList = []
+                    ingredients = input("\nPlease input all ingredients, along with their amount, separated by commas: ")
+                    ingredients = self.replaceApostrophe(ingredients)
+                    ingredientList = ingredients.split(",")
+
+                    instructionsList = []
+
+                    print("\nPlease input instructions step by step. Once you are done, enter '1' ")
+
+                    while(True):
+                        instructionToAdd = input("Instruction: ")
+                        instructionToAdd = self.replaceApostrophe(instructionToAdd)
+                        if(instructionToAdd == "1"):
+                            break
+                        instructionsList.append(instructionToAdd)
+                    
+
+                    prepare_time = int(input("\nPlease enter the preparation time in minutes: "))
+                    cook_time = int(input("Please enter the cook time in minutes: "))
+                    total_time = prepare_time + cook_time
+                    self.mycursor.execute("UPDATE CleanRecipes SET recipe_name = '{}', prepare_time = '{}', cook_time = '{}', total_time = '{}' WHERE recipe_id = '{}'".format(recipeName, prepare_time, cook_time, total_time, recipeID))
+                    self.database.commit()
+                    self.mycursor.execute("DELETE FROM RecipeIngredients WHERE recipe_id = '{}';".format(recipeID))
+                    self.mycursor.execute("INSERT INTO RecipeIngredients (recipe_id, ingredients) VALUES ('{}','{}')".format(recipeID, ingredients))
+
+                    self.mycursor.execute("DELETE FROM Ingredients WHERE recipe_id = '{}';".format(recipeID))
+                    self.mycursor.execute("DELETE FROM Instructions WHERE recipe_id = '{}';".format(recipeID))
+                    ingredientNumber = 0
+                    for i in ingredientList:
+                        i = self.replaceApostrophe(i)
+                        ingredientNumber = ingredientNumber + 1
+                        self.mycursor.execute("INSERT INTO Ingredients (recipe_id, ingredient_number, ingredient_name) VALUES ('{}','{}', '{}')".format(recipeID, ingredientNumber, i))
+                    self.database.commit()
+                    instructionNumber = 0
+                    for i in instructionsList:
+                        instructionNumber = instructionNumber + 1
+                        self.mycursor.execute("INSERT INTO Instructions (recipe_id, step, description) VALUES ('{}','{}', '{}')".format(recipeID, instructionNumber, i))
+                    self.database.commit()
+
+
+
