@@ -603,7 +603,6 @@ class recipes:
             print("\nYou are not logged in. Please restart the app and sign in/sign up")
             return
         else:
-            print(self.username)
             self.mycursor.execute("SELECT recipe_name, recipe_id From CleanRecipes WHERE author = '{}';".format(self.username))
             myresult = self.mycursor.fetchall()
             if (len(myresult) == 0):
@@ -653,7 +652,6 @@ class recipes:
                             break
                         instructionsList.append(instructionToAdd)
                     
-
                     prepare_time = int(input("\nPlease enter the preparation time in minutes: "))
                     cook_time = int(input("Please enter the cook time in minutes: "))
                     total_time = prepare_time + cook_time
