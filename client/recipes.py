@@ -1,10 +1,10 @@
+import sys
+import os
+sys.path.append("{}/datamining".format(os.getcwd()))
 import mysql.connector
+from datamining import mining
 from mysql.connector.errors import Error
-from recipe import recipe
-from mining import mining
-from sqlalchemy import create_engine
-import pymysql
-from scipy.sparse.linalg import svds
+from client.recipe import recipe
 import pandas as pd
 import numpy as np
 
@@ -71,7 +71,7 @@ class recipes:
                 if(not self.getNumOfReviews(self.profileID)):
                     print("You need to review at least 1 recipe to get recommendations. Check out some recipes and leave some reviews. The more reviews you leave - the better the recommendations!")
                 else:
-                    recommender = mining()
+                    recommender = mining.mining()
                     recommendedRecipes = recommender.recommend_recipes(self.profileID)
                     self.getRecipesFromDataframe(recommendedRecipes)
 
