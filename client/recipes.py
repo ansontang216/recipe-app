@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector.errors import Error
 from recipe import recipe
+from mining import mining
 from sqlalchemy import create_engine
 import pymysql
 from scipy.sparse.linalg import svds
@@ -44,7 +45,7 @@ class recipes:
         firstResponse = self.inputValidater(firstResponse, ['1', '2'])
         
         if (firstResponse == "1"):
-            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n\t14. Search using all parameters\n2. Submit Recipe\n3. View and Edit your Recipes\nPlease pick an option (11,12,13,2,3): """
+            recipesMessage = """\n1. Find Recipe:\n\t11. Find Recipe by Name\n\t12. Find Recipe by Ingredients\n\t13. Find Recipe by Total Time\n\t14. Search using all parameters\n2. Submit Recipe\n3. View and Edit your Recipes\nPlease pick an option (11,12,13,14,2,3): """
 
             recipesResponse = input(recipesMessage)
             recipesResponse = self.inputValidater(recipesResponse, ['11', '12', '13', '14', '2', '3'])
@@ -70,7 +71,8 @@ class recipes:
                 if(not self.getNumOfReviews(self.profileID)):
                     print("You need to review at least 1 recipe to get recommendations. Check out some recipes and leave some reviews. The more reviews you leave - the better the recommendations!")
                 else:
-                    recommendedRecipes = self.recommend_recipes(self.profileID)
+                    recommender = mining()
+                    recommendedRecipes = recommender.recommend_recipes(self.profileID)
                     self.getRecipesFromDataframe(recommendedRecipes)
 
         return
@@ -202,7 +204,7 @@ class recipes:
         if (yesOrNoReviews == "Y" or yesOrNoReviews == "y"):
             filterByRating = input("\nWould you like to filter Reviews by Ratings? (Y/N): ")
             filterByRating = self.inputValidater(filterByRating, ['Y', 'N', 'y', 'n'])
-            if(filterByRating == "Y"):
+            if(filterByRating == "Y" or filterByRating == "y"):
                 getMinimumRating = int(input("Select a minimum rating from 1-5 "))
                 getMinimumRating = self.inputValidaterInt(getMinimumRating, [1, 2, 3, 4, 5])
                 self.mycursor.execute(" SELECT rate, comment From CleanReviews WHERE recipe_id = '{}' and rate >= '{}';".format(recipeID, getMinimumRating))
@@ -228,89 +230,12 @@ class recipes:
                 if(len(myresult) == 0):
                     print("\nThere are no reviews for this recipe.")
                 else:
-                    print("We here")
-                    print(len(myresult))
                     for x in myresult:
                         i = i + 1
                         print("\nRating: %i STARS" % (x["rate"]))
                         print ("%i. %s" % (i, x["comment"]))
 
-    def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
-        
-        user_row_number = userID 
-        sorted_user_predictions = preds_df.iloc[user_row_number].sort_values(ascending=False) # UserID starts at 1
 
-        user_data = original_ratings_df[original_ratings_df.profile_id == (userID)]
-        user_full = (user_data.merge(movies_df, how = 'left', left_on = 'recipe_id', right_on = 'recipe_id').
-                        sort_values(['rate'], ascending=False))
-    
-        recommendations = (movies_df[~movies_df['recipe_id'].isin(user_full['recipe_id'])]).merge(pd.DataFrame(sorted_user_predictions).reset_index(), how = 'left', left_on = 'recipe_id',
-                right_on = 'recipe_id').rename(columns = {user_row_number: 'Predictions'}).sort_values('Predictions', ascending = False).iloc[:num_recommendations, :-1]
-    
-        return user_full, recommendations
-
-    def recommend_recipes(self, userID):
-
-        db_connection_str = 'mysql+pymysql://a32saini:dbhty@zRCkIT5@LY4T^4@marmoset04.shoshin.uwaterloo.ca/project_28'
-        db_connection = create_engine(db_connection_str)
-        conn = db_connection.connect()
-        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=conn)
-        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=conn)
-        
-        
-        usrID_index = -1
-        # create a temp table which maps and stores profileID as index that starts from 0
-        temp = reviews.sort_values("profile_id").reset_index(drop=True)
-        # Use a subset of reviews if the entire reviews makes the table crash.
-        # temp = rv[:50000].sort_values("profileID").reset_index(drop=True)
-        prev_id = -1
-        curr_id = -1
-        k = 0 
-        for i in range(len(temp)):
-            curr_id = temp.loc[i, 'profile_id']
-            if prev_id == curr_id:
-                temp.loc[i, 'profile_id'] = k - 1
-            else :
-                temp.loc[i, 'profile_id'] = k
-                k = k+1
-            prev_id  = curr_id
-            ## Store userID index for future use in the algorith
-            if curr_id == userID:
-               usrID_index = temp.loc[i, 'profile_id']
-        
-
-        user_ratings = temp[['recipe_id', 'profile_id', 'rate']]
-
-        # remove duplicates
-        user_ratings_new = user_ratings.drop_duplicates(subset=["recipe_id", "profile_id"], keep = 'last').reset_index(drop = True)
-
-        # Create a matrix for userID recipeID and the rating
-        df_recipe_features = user_ratings_new.pivot(
-                                                    index='profile_id',
-                                                    columns='recipe_id',
-                                                    values='rate'
-                                                    ).fillna(0)
-        # SVD algorithm
-        R = df_recipe_features.values
-        user_ratings_mean = np.mean(R, axis = 1)
-        R_demeaned = R - user_ratings_mean.reshape(-1, 1)
-
-        U, sigma, Vt = svds(R_demeaned, k = 50)
-        sigma = np.diag(sigma)
-        all_user_predicted_ratings = np.dot(np.dot(U, sigma), Vt) + user_ratings_mean.reshape(-1, 1)
-        
-        # Get rating predictions
-        preds_df = pd.DataFrame(all_user_predicted_ratings, columns = df_recipe_features.columns)
-
-        #Get recommendations
-        # 5 is the number of recommendation, can change it to a different number too
-        already_rated, recommendation = self.helper(preds_df, usrID_index, recipes, user_ratings_new, 5)
-        
-        #returns a pandas dataframe wich Recipe name and recipe ID 
-        # can be converted to np array if needed
-        conn.close()
-        db_connection.dispose()
-        return recommendation
 
     def performSignIn(self):
         self.checkConn()
@@ -567,7 +492,6 @@ class recipes:
         if(getRecipeName == 'Any' or getRecipeName == 'any'):
             getRecipeName = ""
 
-        print( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_name like '%{}%' AND total_time <= {} AND recipe_id IN (SELECT recipe_id From RecipeIngredients WHERE {});".format(getRecipeName, getMaxTime, like))
         self.mycursor.execute( "SELECT recipe_name, recipe_id FROM CleanRecipes where recipe_name like '%{}%' AND total_time <= {} AND recipe_id IN (SELECT recipe_id From RecipeIngredients WHERE {});".format(getRecipeName, getMaxTime, like))
 
         myresult = self.mycursor.fetchall()
