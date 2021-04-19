@@ -71,7 +71,7 @@ class recipes:
                 if(not self.getNumOfReviews(self.profileID)):
                     print("You need to review at least 1 recipe to get recommendations. Check out some recipes and leave some reviews. The more reviews you leave - the better the recommendations!")
                 else:
-                    recommender = mining.mining()
+                    recommender = mining.mining(self.database)
                     recommendedRecipes = recommender.recommend_recipes(self.profileID)
                     self.getRecipesFromDataframe(recommendedRecipes)
 

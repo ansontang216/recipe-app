@@ -1,10 +1,11 @@
-from sqlalchemy import create_engine
-import pymysql
 from scipy.sparse.linalg import svds
 import pandas as pd
 import numpy as np
 
 class mining:
+
+    def __init__(self, conn):
+        self.conn = conn
 
     def helper(self, preds_df, userID, movies_df, original_ratings_df, num_recommendations=5):
             
@@ -22,12 +23,10 @@ class mining:
 
     def recommend_recipes(self, userID):
         print("\nRecommender system is running it's algorithm..\n")
-        db_connection_str = 'mysql+pymysql://a32saini:dbhty@zRCkIT5@LY4T^4@marmoset04.shoshin.uwaterloo.ca/project_28'
-        db_connection = create_engine(db_connection_str)
-        conn = db_connection.connect()
-        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=conn)
-        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=conn)
-        
+
+        recipes         = pd.read_sql("SELECT recipe_name, recipe_id From CleanRecipes", con=self.conn)
+        reviews         = pd.read_sql("SELECT profile_id, recipe_id, rate From CleanReviews", con=self.conn)
+
         
         usrID_index = -1
         # create a temp table which maps and stores profileID as index that starts from 0
@@ -37,6 +36,7 @@ class mining:
         prev_id = -1
         curr_id = -1
         k = 0 
+
         for i in range(len(temp)):
             curr_id = temp.loc[i, 'profile_id']
             if prev_id == curr_id:
@@ -48,7 +48,6 @@ class mining:
             ## Store userID index for future use in the algorith
             if curr_id == userID:
                usrID_index = temp.loc[i, 'profile_id']
-        
 
         user_ratings = temp[['recipe_id', 'profile_id', 'rate']]
 
@@ -76,9 +75,8 @@ class mining:
         #Get recommendations
         # 5 is the number of recommendation, can change it to a different number too
         already_rated, recommendation = self.helper(preds_df, usrID_index, recipes, user_ratings_new, 5)
-        
+
         #returns a pandas dataframe wich Recipe name and recipe ID 
         # can be converted to np array if needed
-        conn.close()
-        db_connection.dispose()
+
         return recommendation
