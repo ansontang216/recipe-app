@@ -2,6 +2,9 @@ from scipy.sparse.linalg import svds
 import pandas as pd
 import numpy as np
 
+# The Code below is heavily borrowed from this article :
+# https://heartbeat.fritz.ai/recommender-systems-with-python-part-iii-collaborative-filtering-singular-value-decomposition-5b5dcb3f242b
+
 class mining:
 
     def __init__(self, conn):
