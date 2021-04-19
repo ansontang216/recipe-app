@@ -1,6 +1,3 @@
-import sys
-import os
-sys.path.append("{}/datamining".format(os.getcwd()))
 import mysql.connector
 from datamining import mining
 from mysql.connector.errors import Error
