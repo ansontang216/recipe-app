@@ -3,7 +3,7 @@ Here you will find the main repository for Group 28's final project.
 
 ## Running the client application 
 
-Before running the application please make sure the following libraries are installed on your system - `MySQL.Connector`, `Pandas`, `scipy`, `pymysql`, `sqlAlchemy`, `numpy`. These libraries have been added to eceubuntu - we were able to run the application on eceubuntu successfully.
+Before running the application please make sure the following libraries are installed on your system - `MySQL.Connector`, `Pandas`, `scipy`, `numpy`. These libraries have been added to eceubuntu - we were able to run the application on eceubuntu successfully.
 
 In order to run the client app - please make sure you are in the `ece356` directory of the repository.
 
