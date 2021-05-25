@@ -9,4 +9,4 @@ Use the command `python3 run.py` to start the client application.
 
 References:
 [1] https://heartbeat.fritz.ai/recommender-systems-with-python-part-iii-collaborative-filtering-singular-value-decomposition-5b5dcb3f242b
-(data mining (integrated in recipes.py) is referenced from article [1])
+(data mining 
